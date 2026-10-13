@@ -49,11 +49,11 @@ android {
         // minSdk 26：VibrationEffect 等 API 从 26 起可用，取 26 可避免为 24/25 写已废弃的兼容分支
         minSdk = 26
         targetSdk = 37
-        // 1.0.0：首个发布版本。
+        // 1.0.1：修复自定义形状点击时闪出方框（写入页胶囊标签、分段选择器等）。
         // 发版约束：versionCode 只能升不能降；versionName 必须与所打的 tag 一致
         // （CI 的 release 任务会校验 tag == "v" + versionName，不一致直接失败）。
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
     }
 
     signingConfigs {
