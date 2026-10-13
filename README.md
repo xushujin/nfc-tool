@@ -324,9 +324,12 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
-推 tag 后 `.github/workflows/android-ci.yml` 会跑两个任务：
+**触发条件：只有推 `v*` tag 才会跑。** 推普通分支、提 PR 都不触发任何构建；
+需要手动跑一次时到 Actions 页面点 "Run workflow"（`workflow_dispatch`）。
 
-**`verify`**（所有分支 / PR / tag 都会跑）：准备 Android SDK 组件 → 单元测试 → Lint → 上传报告。
+推 tag 后会跑两个任务：
+
+**`verify`**：准备 Android SDK 组件 → 单元测试 → Lint → 上传报告。
 
 **`release`**（仅 `v*` tag，且带 **`needs: verify`** —— 测试或 Lint 不过就不会发版）：
 
@@ -340,7 +343,7 @@ git push origin v1.1.0
 7. `gh release create` 创建 Release 并附上产物；**同一个 tag 重跑时**改为覆盖上传
    （`gh release upload --clobber`），因此重新打 tag 不会因为 Release 已存在而失败。
 
-推送普通分支或提 PR 只跑 `verify`，不涉及签名。
+推送普通分支不会触发任何任务。
 
 ### 几个容易踩的坑（本工程已规避）
 
@@ -355,6 +358,9 @@ git push origin v1.1.0
   工作流里用 `tr -cd 'A-Za-z0-9._-'` 过滤 tag 名。
 - **Actions 用的是 tag 指向的 commit 上的工作流**：如果只推 `main` 而不重新打 tag，
   工作流改动不会生效。改了工作流要 `git tag -f v1.1.0 && git push -f origin v1.1.0`。
+- **解析 `versionName` 不能用 `grep -m1 versionName`**：`build.gradle.kts` 的注释里
+  出现这个词也会被匹配到，于是把注释文本当成版本号，tag 校验直接失败（本工程踩过一次）。
+  工作流改用锚定「行首赋值」的 `sed -nE`，并加了「解析不出来就报错」的兜底。
 
 ---
 

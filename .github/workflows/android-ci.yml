@@ -1,15 +1,12 @@
 name: Android CI
 
-# 触发条件：
-#   - 推 tag（形如 v1.0.0）→ 构建签名 release 并自动发布 GitHub Release
-#   - 推分支 / 提 PR        → 只跑 lint 与单元测试
+# 触发条件：**只有推 tag 才会跑**（形如 v1.0.0）→ 校验 + 构建签名 release + 发布 GitHub Release。
+# 推普通分支 / 提 PR 不触发任何构建。
+# 需要手动跑一次时，到 Actions 页面点 "Run workflow"（workflow_dispatch）。
 on:
   push:
     tags:
       - "v*"
-    branches:
-      - "**"
-  pull_request:
   workflow_dispatch:
 
 # 发布 Release 需要写 contents 权限
@@ -108,7 +105,16 @@ jobs:
       - name: 校验 tag 与 versionName 一致
         run: |
           set -euo pipefail
-          VERSION_NAME=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          # 只认「行首（可含缩进）versionName = "x.y.z"」这种赋值。
+          # 不能用 `grep -m1 versionName`：注释里出现 versionName 也会被抓到，
+          # 曾因此把注释文本当成版本号，导致 tag 校验直接失败。
+          VERSION_NAME=$(sed -nE \
+            's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
+            app/build.gradle.kts | head -1)
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::未能从 app/build.gradle.kts 解析出 versionName（期望形如 versionName = \"1.0.0\"）"
+            exit 1
+          fi
           echo "versionName=$VERSION_NAME  tag=$GITHUB_REF_NAME"
           if [ "$GITHUB_REF_NAME" != "v$VERSION_NAME" ]; then
             echo "::error::tag $GITHUB_REF_NAME 与 build.gradle.kts 中的 versionName $VERSION_NAME 不一致"
