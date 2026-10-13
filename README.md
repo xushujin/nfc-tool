@@ -8,6 +8,8 @@
 
 界面为拟态（Neumorphism）风格，内置 5 套配色主题。
 
+本项目以 [Apache License 2.0](LICENSE) 开源。
+
 > 文档原则：本文所写内容与代码逐项对应。凡是**没有实际验证过**的部分，
 > 都集中列在[「未验证项与已知限制」](#未验证项与已知限制)一节，不做模糊表述。
 
@@ -28,6 +30,7 @@
 - [权限清单](#权限清单)
 - [数据与隐私](#数据与隐私)
 - [未验证项与已知限制](#未验证项与已知限制)
+- [许可](#许可)
 
 ---
 
@@ -183,6 +186,7 @@ nfc-tool/
 ├── tools/                                       # 测试样本生成脚本（Python）
 ├── .github/workflows/android-ci.yml             # CI：校验 + 打 tag 发布
 ├── keystore.properties.example
+├── LICENSE                                      # Apache License 2.0 全文
 └── README.md
 ```
 
@@ -806,4 +810,57 @@ Android 11+ 的**包可见性**规则下，不声明它，`queryIntentActivities
 
 ## 许可
 
-本仓库未附许可证文件。如需使用请先与作者确认。
+本项目以 **Apache License 2.0** 授权，许可证全文见仓库根目录的 [`LICENSE`](LICENSE)。
+
+```
+Copyright 2026 xushujin
+```
+
+### 你可以做什么
+
+在遵守下述条件的前提下，Apache 2.0 允许你：商用、私用、修改、再分发，
+以源码或二进制形式分发，并获得贡献者授予的**专利许可**（第 3 条），
+该专利许可不可撤回——除非你主动对作品发起专利诉讼。
+
+### 你需要做什么
+
+- 分发本作品或其衍生作品时，**附带一份许可证副本**（第 4(a) 条）；
+- **修改过的文件要标注你做过修改**（第 4(b) 条）；
+- 保留源码中的**版权、专利、商标与署名声明**（第 4(c) 条）；
+- 若本仓库含 `NOTICE` 文件（当前**没有**），衍生作品需一并保留其中的署名信息（第 4(d) 条）。
+
+### 不授予的权利
+
+- **商标**：本许可证不授予使用作者姓名、商标或产品名的权利（第 6 条），
+  衍生作品不得暗示由原作者背书。
+- **担保**：作品按"现状"提供，不附带任何明示或默示担保（第 7 条）；
+  作者不对使用本作品造成的任何损失承担责任（第 8 条）。
+
+### 第三方组件
+
+随 APK 一起分发的第三方库同样以 Apache 2.0 授权，与本许可证兼容。
+下表是按构建配置核对后的实际清单 —— 来源是 `app/build.gradle.kts` 的
+`dependencies` 块，以及各依赖 POM 中的 `<license>` 元数据：
+
+| 组件 | 作用域 | 许可证 |
+| --- | --- | --- |
+| AndroidX（Core KTX / Lifecycle / Activity Compose） | 进入 APK | Apache License 2.0 |
+| Jetpack Compose（UI / Foundation / Material3） | 进入 APK | Apache License 2.0 |
+| Kotlin 标准库、kotlinx-coroutines | 进入 APK | Apache License 2.0 |
+| JUnit 4 | 仅测试，不进入 APK | Eclipse Public License 1.0 |
+| Truth | 仅测试，不进入 APK | Apache License 2.0 |
+| Robolectric | 仅测试，不进入 APK | MIT License |
+| androidx.test:core | 仅测试，不进入 APK | Apache License 2.0 |
+
+`tools/` 下的 Python 脚本用于生成测试样本，依赖第三方库 **ndeflib**；
+它只在开发机上运行，**不随应用分发**。
+
+### 许可与使用是两件事
+
+许可证解决的是**代码**的授权问题，不改变**使用**层面的边界：
+
+- 本应用**不破解任何加密**。MIFARE Classic 只尝试公开的默认扇区密钥，
+  厂商自定义密钥读不到就是读不到。
+- 本应用**无法克隆 UID**（厂商块出厂只读），因此靠 UID 认证的门禁卡
+  即使复制成功也刷不开门。
+- 复制他人卡片可能涉及法律与授权问题，请只对**你自己拥有或已获授权**的卡片操作。
