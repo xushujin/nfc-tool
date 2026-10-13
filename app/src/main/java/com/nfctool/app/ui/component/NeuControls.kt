@@ -209,7 +209,7 @@ fun NeuSwitch(
     Box(
         modifier = modifier
             .size(width = trackWidth, height = trackHeight)
-            .clickable { onCheckedChange(!checked) }
+            .neuClickable { onCheckedChange(!checked) }
             .drawBehind {
                 val strokePx = with(density) { NeuDimens.insetStroke.toPx() }
                 val corner = size.height / 2f
@@ -297,7 +297,7 @@ fun NeuSegmented(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onSelect(index) }
+                        .neuClickable { onSelect(index) }
                         .background(
                             color = if (selected) palette.accent else Color.Transparent,
                             shape = RoundedCornerShape(NeuDimens.cornerSmall - 4.dp),

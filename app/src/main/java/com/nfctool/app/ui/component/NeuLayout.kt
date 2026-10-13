@@ -219,7 +219,7 @@ fun NeuBottomNav(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onSelect(index) }
+                        .neuClickable { onSelect(index) }
                         .padding(vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {

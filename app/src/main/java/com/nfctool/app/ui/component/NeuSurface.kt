@@ -1,6 +1,7 @@
 package com.nfctool.app.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -164,3 +165,23 @@ fun NeuSurface(
 
 /** 阴影预留的外边距，供需要精确对齐的布局使用。 */
 val NeuShadowReserve: Dp = NeuDimens.shadowOffset + NeuDimens.shadowBlur / 2
+
+/**
+ * 无涟漪点击。
+ *
+ * 拟态风格用「形状 / 颜色变化」承担按压反馈，不叠加 Material 的涟漪 ——
+ * Material 的默认涟漪是按**矩形边界**绘制的，套在胶囊、圆角这类自定义形状上，
+ * 按下时会先闪出一个方框，再缩回原形状（写入页顶部胶囊标签就踩过这个）。
+ *
+ * 需要按压状态（如按钮凸起/凹陷翻转）的组件请改用带 `interactionSource` 的写法，
+ * 见 [NeuButton]。
+ */
+fun Modifier.neuClickable(
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+): Modifier = clickable(
+    interactionSource = null,
+    indication = null,
+    enabled = enabled,
+    onClick = onClick,
+)

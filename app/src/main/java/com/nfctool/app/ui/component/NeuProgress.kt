@@ -8,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -222,7 +221,7 @@ fun NeuChipRow(
             val selected = index == selectedIndex
             Box(
                 modifier = Modifier
-                    .clickable { onSelect(index) }
+                    .neuClickable { onSelect(index) }
                     .background(
                         color = if (selected) palette.accent else palette.insetFill,
                         shape = RoundedCornerShape(50),
@@ -250,7 +249,7 @@ fun NeuPillButton(
 ) {
     Row(
         modifier = modifier
-            .clickable(onClick = onClick)
+            .neuClickable(onClick = onClick)
             .background(color = NeuTheme.palette.accent.copy(alpha = 0.14f), shape = RoundedCornerShape(50))
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
