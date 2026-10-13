@@ -750,10 +750,14 @@ Android 11+ 的**包可见性**规则下，不声明它，`queryIntentActivities
 5. **`embeddedNdef`（从 MIFARE 转储解析 NDEF）是启发式实现。**
    做法是把所有数据块拼起来找 NDEF TLV，对标准 NDEF 格式化的卡片有效，
    数据块内容非标准的卡片可能解析失败或误判。界面文案已标注「尽力解析」。
-6. **CI 工作流未在 GitHub 上实际跑过。**
-   工作流文件按 GitHub Actions 语法编写，其中 `actions/checkout@v4`、
-   `actions/setup-java@v4`、`actions/upload-artifact@v4` 的版本号未经实际运行确认，
-   首次推送后如提示版本不存在，请按 GitHub 提示调整。
+6. **CI 工作流已在 GitHub 上实跑通过。**
+   推 `v1.0.0` tag 后 `verify` 与 `release` 两个任务都跑通，
+   Release 里生成了 `nfc-tool-v1.0.0.apk`（1.34 MB）与 `.sha256` 两个附件。
+   action 版本已按实际告警从 v4 升到 `actions/checkout@v7`、`actions/setup-java@v6`、
+   `actions/upload-artifact@v7`（三者都是 Node 24 运行时），
+   消除 "Node.js 20 is deprecated" 与 setup-java v4 的弃用告警。
+   尚未覆盖：SDK 组件在 runner 上的安装耗时、以及「Release 已存在时走
+   `gh release upload --clobber`」这条分支还没有实际走到过。
 7. **Robolectric 固定在 API 34。**
    应用 targetSdk 为 37，但数据层测试在 API 34 下运行。
    这只影响测试环境，不影响产物，但意味着 API 35+ 的行为差异未被测试覆盖。
