@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 拟态风格底色：所有配色主题都以此为基色做明暗双向偏移 -->
+    <color name="neu_window_background">#EEF0F5</color>
+</resources>

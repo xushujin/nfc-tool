@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      权限说明见「关于」页与 README「权限清单」章节，两处逐条对应。
+      本应用不申请 INTERNET 权限：写入的网页/音视频地址只是被写进标签，
+      应用自身从不联网请求，也不需要联网才能工作。
+    -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
+      ConnectivityManager 判断当前网络类型所需（普通权限，无需运行时申请）。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      `WifiManager.getConnectionInfo()` 所需（普通权限，安装即授予，无需运行时申请）。
+      兜底读取路径会调用它；缺少此权限时部分 ROM 直接抛 SecurityException。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!--
+      读取「当前连接的 WiFi」名称所需。主路径按版本择一：
+        Android 13+ 使用 NEARBY_WIFI_DEVICES（声明 neverForLocation 表示不用于定位）；
+        Android 8~12 使用 ACCESS_FINE_LOCATION，且需用户开启定位服务。
+      定位权限**不再限制 maxSdkVersion**：部分厂商 ROM（如 MIUI）在 Android 13+ 上
+      仅授予「附近设备」仍会把 SSID 脱敏，必须再给「位置信息」并开启定位服务才放行。
+      这类 ROM 上应用会在读不到时**引导用户**补授权，不会默认索取定位。
+      没有这些权限也可以手动输入 SSID，功能降级但不会不可用。
+      注意：系统不向任何应用提供已保存 WiFi 的密码，因此密码始终需要用户手输。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Lint 要求 FINE 与 COARSE 成对声明：前者缺少数值时系统至少能给出粗略定位 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!--
+      usesPermissionFlags 只在 API 31+ 被解析器识别，低版本会忽略（无害）；
+      本工程 minSdk 为 26，lint 的 UnusedAttribute 因此提示，此处显式忽略并说明。
+    -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:ignore="UnusedAttribute" />
+
+    <!--
+      Android 11+ 的包可见性：查询「手机上可启动的应用」必须显式声明 <queries>，
+      否则 queryIntentActivities 只会返回可见的少数应用。
+      这里只声明 MAIN/LAUNCHER 这一种意图 —— 用途是「写入应用」时让用户挑包名，
+      不申请 QUERY_ALL_PACKAGES（那是需要重点审查的高敏权限）。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="true" />
+
+    <application
+        android:name=".NfcToolApplication"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NfcTool">
+
+        <!--
+          不声明 NDEF_DISCOVERED / TECH_DISCOVERED 意图过滤器：
+          本应用只在自身处于前台时读卡（NfcAdapter.enableReaderMode），
+          不抢占其他应用对标签的处理权。
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density|fontScale"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.NfcTool"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

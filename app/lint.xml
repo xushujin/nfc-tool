@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lint 规则开关。
+
+  本工程把 Lint 的告警视为错误（warningsAsErrors = true），
+  因此每一条被降级的检查都必须写明理由 —— 不允许"看着烦就关"。
+-->
+<lint>
+
+    <!--
+      NewerVersionAvailable：版本目录里 Kotlin 与 Compose 编译器插件固定为 2.2.10。
+      这不是"没跟上更新"，而是 AGP 9.x 内置 Kotlin 带来的硬约束：
+      AGP 9.4.1 内置 KGP 2.2.10，Compose 编译器插件必须与之同版本，
+      擅自升级会直接导致构建失败。详见 README「技术栈」与 libs.versions.toml 注释。
+      代价是这条检查无法再提醒其它依赖的更新，需靠人工定期核对版本目录。
+    -->
+    <issue id="NewerVersionAvailable" severity="informational" />
+
+    <!--
+      UseKtx：Lint 建议在 SettingsDao 使用 `androidx.core.database.transaction` 扩展，
+      但当前依赖的 androidx.core 1.19.1 并没有这个扩展（已实际验证：引入即编译失败）。
+      因此保持手写的 beginTransaction / setTransactionSuccessful / endTransaction，
+      语义完全等价且显式可控；待该扩展可用后再改回 KTX 写法。
+    -->
+    <issue id="UseKtx" severity="informational" />
+
+    <!--
+      UnnecessaryRequiredFeature：android.hardware.nfc 刻意声明为 required="true"。
+      本应用的全部功能都依赖 NFC，没有 NFC 硬件的设备装了也用不了，
+      让它从应用市场里被过滤掉才是对的做法。
+    -->
+    <issue id="UnnecessaryRequiredFeature" severity="informational" />
+
+</lint>

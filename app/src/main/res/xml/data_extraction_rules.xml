@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  数据提取规则（Android 12+）。
+
+  本应用的数据只有一张本地数据库，其中存的是读卡摘要（UID、技术类型、记录类别等）。
+  按「不落盘敏感内容 / 不随系统备份离开设备」的设计，这里把数据库从云备份与
+  设备迁移两种场景中全部排除，与 AndroidManifest 中的 allowBackup="false" 一致。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="." />
+    </device-transfer>
+</data-extraction-rules>
