@@ -1,9 +1,14 @@
 package com.nfctool.app.data
 
 import android.content.Context
+import com.nfctool.app.BuildConfig
 import com.nfctool.app.data.db.AppDatabase
 import com.nfctool.app.data.db.HistoryDao
 import com.nfctool.app.data.db.SettingsDao
+import com.nfctool.app.data.update.ApkDownloader
+import com.nfctool.app.data.update.ApkInstaller
+import com.nfctool.app.data.update.GitHubReleaseClient
+import com.nfctool.app.data.update.UpdateRepository
 
 /**
  * 手工依赖容器。
@@ -25,5 +30,18 @@ class AppContainer(context: Context) {
 
     val historyRepository: HistoryRepository by lazy {
         HistoryRepository(HistoryDao(database), settingsRepository)
+    }
+
+    /** 在线更新：GitHub Releases 检查 + 缓存目录下载 + 系统安装器。 */
+    val updateRepository: UpdateRepository by lazy {
+        UpdateRepository(
+            client = GitHubReleaseClient(
+                repo = BuildConfig.GITHUB_REPO,
+                userAgent = "nfc-tool/${BuildConfig.VERSION_NAME}",
+            ),
+            downloader = ApkDownloader(appContext.cacheDir),
+            installer = ApkInstaller(appContext),
+            settingsRepository = settingsRepository,
+        )
     }
 }

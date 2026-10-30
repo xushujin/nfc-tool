@@ -33,6 +33,7 @@ import com.nfctool.app.ui.component.NeuButtonContent
 import com.nfctool.app.ui.component.NeuElevation
 import com.nfctool.app.ui.component.NeuIcon
 import com.nfctool.app.ui.component.NeuIconKind
+import com.nfctool.app.ui.component.NeuKeyValueRow
 import com.nfctool.app.ui.component.NeuScreen
 import com.nfctool.app.ui.component.NeuSectionTitle
 import com.nfctool.app.ui.component.NeuSurface
@@ -57,6 +58,11 @@ fun SettingsScreen(
     onToggleAutoSave: (Boolean) -> Unit,
     onLanguageChange: (String) -> Unit,
     onOpenAbout: () -> Unit,
+    versionName: String,
+    skippedUpdateVersion: String,
+    checkingUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
+    onClearSkippedUpdate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val palette = NeuTheme.palette
@@ -114,6 +120,40 @@ fun SettingsScreen(
                 level = NeuBannerLevel.WARNING,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+
+        NeuSectionTitle(text = "版本与更新")
+        NeuSurface(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                NeuKeyValueRow("当前版本", versionName)
+                if (skippedUpdateVersion.isNotBlank()) {
+                    NeuKeyValueRow("已跳过", "v$skippedUpdateVersion")
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(NeuDimens.gapSmall))
+        NeuButton(
+            onClick = onCheckUpdate,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !checkingUpdate,
+            primary = true,
+        ) {
+            NeuButtonContent(
+                icon = NeuIconKind.Info,
+                text = if (checkingUpdate) "正在检查更新…" else "检查更新",
+            )
+        }
+        if (skippedUpdateVersion.isNotBlank()) {
+            Spacer(modifier = Modifier.height(NeuDimens.gapSmall))
+            NeuButton(
+                onClick = onClearSkippedUpdate,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                NeuButtonContent(
+                    icon = NeuIconKind.Check,
+                    text = "取消跳过 v$skippedUpdateVersion",
+                )
+            }
         }
 
         NeuSectionTitle(text = "其他")

@@ -19,6 +19,7 @@ object AppInfo {
         "NFC 核心" to "自实现 NDEF 编解码（含分块记录）、WSC 属性 TLV 编码、MIFARE 扇区布局换算",
         "存储" to "平台自带 SQLite（SQLiteOpenHelper）+ 显式版本迁移，未使用 ORM",
         "依赖注入" to "无框架，手工装配（AppContainer）",
+        "更新检查" to "GitHub Releases API，用 HttpURLConnection + 平台 org.json，未引入第三方网络库",
         "第三方库" to "仅 AndroidX 官方库；未引入任何第三方 UI 库或 DI 框架",
     )
 
@@ -31,6 +32,7 @@ object AppInfo {
         "写入网页" to "URI 记录，支持 http / https / tel / mailto",
         "写入音频视频" to "写入网络地址（URI 记录）；小文件可内嵌为 MIME 记录",
         "MIFARE Classic" to "使用常见密钥逐扇区认证并读取转储，可回写数据块",
+        "应用内更新" to "从 GitHub Releases 检查新版本，应用内下载并拉起系统安装器",
     )
 
     val LIMITATIONS: List<Pair<String, String>> = listOf(
@@ -53,6 +55,18 @@ object AppInfo {
             "android.permission.VIBRATE",
             "普通权限",
             "用于读卡成功时给出振动反馈，可在「设置」中关闭。不读取任何设备信息。",
+        ),
+        Triple(
+            "android.permission.INTERNET",
+            "普通权限（安装时自动获得）",
+            "仅用于检查更新与下载新版本 APK（GitHub Releases）。不采集设备信息、不上报使用数据、"
+                + "不接入任何统计或广告服务；写入标签的网址也不会被应用访问。",
+        ),
+        Triple(
+            "android.permission.REQUEST_INSTALL_PACKAGES",
+            "特殊权限（需用户手动开启）",
+            "用于在下载完成后拉起系统安装器。它不提供静默安装能力：每次安装都需要你在系统界面确认；"
+                + "未开启时应用会跳转到系统设置页，由你决定是否允许。",
         ),
         Triple(
             "android.permission.ACCESS_NETWORK_STATE",
@@ -108,7 +122,10 @@ object AppInfo {
     const val PRIVACY_TITLE = "数据与隐私"
 
     val PRIVACY: List<Pair<String, String>> = listOf(
-        "不联网" to "本应用未申请 INTERNET 权限，写入的网址只是被写进标签，应用自身从不发起网络请求。",
+        "联网仅限更新检查" to
+            "应用只在您主动点「检查更新」时访问 GitHub Releases 接口，不携带账号、设备标识或使用数据；" +
+            "下载的安装包要通过大小、SHA-256 与签名一致性校验才会交给系统安装器。" +
+            "写入标签的网址与音视频地址不会被应用访问。",
         "历史会保存标签原文" to
             "为支持「用历史记录再次写入新卡」，读卡历史会保存标签原文（NDEF 编码与 MIFARE 转储），" +
             "因此 WiFi 密码一类内容会落在本地数据库里。可在设置中关闭自动记录，或随时删除历史。",

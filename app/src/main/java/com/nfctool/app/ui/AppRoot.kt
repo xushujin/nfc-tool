@@ -11,11 +11,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.nfctool.app.BuildConfig
 import com.nfctool.app.ui.component.NeuBannerLevel
 import com.nfctool.app.ui.component.NeuBottomNav
 import com.nfctool.app.ui.component.NeuDialog
 import com.nfctool.app.ui.component.NeuIconKind
 import com.nfctool.app.ui.component.NeuNavItem
+import com.nfctool.app.ui.component.NeuUpdateDialog
 import com.nfctool.app.ui.screen.AboutScreen
 import com.nfctool.app.ui.screen.CopyScreen
 import com.nfctool.app.ui.screen.HistoryScreen
@@ -92,6 +94,11 @@ fun AppRoot(
                             onToggleAutoSave = viewModel::setAutoSaveHistory,
                             onLanguageChange = viewModel::setNdefLanguage,
                             onOpenAbout = { showAbout = true },
+                            versionName = BuildConfig.VERSION_NAME,
+                            skippedUpdateVersion = state.settings.skippedUpdateVersion,
+                            checkingUpdate = state.update is UpdateUiState.Checking,
+                            onCheckUpdate = viewModel::checkForUpdate,
+                            onClearSkippedUpdate = viewModel::clearSkippedUpdate,
                         )
                     }
                 }
@@ -115,6 +122,31 @@ fun AppRoot(
                 level = status.level.toBannerLevel(),
                 onDismiss = viewModel::dismissStatus,
             )
+        }
+        // 发现新版本 / 正在下载：独立弹窗，与结果提示互不覆盖
+        when (val update = state.update) {
+            is UpdateUiState.Available -> NeuUpdateDialog(
+                info = update.info,
+                currentVersion = BuildConfig.VERSION_NAME,
+                apkSizeBytes = update.asset.sizeBytes,
+                onInstall = viewModel::downloadUpdate,
+                onSkip = viewModel::skipUpdate,
+                onDismiss = viewModel::dismissUpdate,
+            )
+
+            is UpdateUiState.Downloading -> NeuUpdateDialog(
+                info = update.info,
+                currentVersion = BuildConfig.VERSION_NAME,
+                apkSizeBytes = update.totalBytes,
+                downloadingFraction = update.fraction,
+                downloadedBytes = update.downloadedBytes,
+                totalBytes = update.totalBytes,
+                onInstall = {},
+                onSkip = {},
+                onDismiss = {},
+            )
+
+            else -> Unit
         }
     }
 }

@@ -13,6 +13,9 @@ object SettingsKeys {
     const val VIBRATE_ON_SCAN = "vibrate_on_scan"
     const val AUTO_SAVE_HISTORY = "auto_save_history"
     const val NDEF_LANGUAGE = "ndef_language"
+
+    /** 用户主动跳过的更新版本（空串表示没有跳过任何版本）。 */
+    const val SKIPPED_UPDATE_VERSION = "skipped_update_version"
 }
 
 /** 全部应用设置的不可变快照。 */
@@ -21,12 +24,15 @@ data class AppSettings(
     val vibrateOnScan: Boolean,
     val autoSaveHistory: Boolean,
     val ndefLanguage: String,
+    /** 已跳过的更新版本号；空串表示未跳过。 */
+    val skippedUpdateVersion: String = "",
 ) {
     fun toMap(): Map<String, String> = mapOf(
         SettingsKeys.THEME_ID to themeId,
         SettingsKeys.VIBRATE_ON_SCAN to vibrateOnScan.toString(),
         SettingsKeys.AUTO_SAVE_HISTORY to autoSaveHistory.toString(),
         SettingsKeys.NDEF_LANGUAGE to ndefLanguage,
+        SettingsKeys.SKIPPED_UPDATE_VERSION to skippedUpdateVersion,
     )
 
     companion object {
@@ -47,6 +53,7 @@ data class AppSettings(
                 ?: DEFAULT.autoSaveHistory,
             ndefLanguage = values[SettingsKeys.NDEF_LANGUAGE]?.takeIf { it.isNotBlank() }
                 ?: DEFAULT.ndefLanguage,
+            skippedUpdateVersion = values[SettingsKeys.SKIPPED_UPDATE_VERSION].orEmpty(),
         )
     }
 }
@@ -84,4 +91,7 @@ class SettingsRepository(private val dao: SettingsDao) {
     suspend fun setAutoSaveHistory(enabled: Boolean) = update { it.copy(autoSaveHistory = enabled) }
 
     suspend fun setNdefLanguage(language: String) = update { it.copy(ndefLanguage = language) }
+
+    suspend fun setSkippedUpdateVersion(version: String) =
+        update { it.copy(skippedUpdateVersion = version.trim()) }
 }

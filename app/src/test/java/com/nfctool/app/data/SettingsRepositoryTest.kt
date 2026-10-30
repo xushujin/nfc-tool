@@ -113,6 +113,7 @@ class SettingsRepositoryTest {
             SettingsKeys.VIBRATE_ON_SCAN,
             SettingsKeys.AUTO_SAVE_HISTORY,
             SettingsKeys.NDEF_LANGUAGE,
+            SettingsKeys.SKIPPED_UPDATE_VERSION,
         )
     }
 }

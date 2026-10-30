@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.nfctool.app.BuildConfig
 import com.nfctool.app.core.media.MediaKind
 import com.nfctool.app.core.media.MediaPlan
 import com.nfctool.app.core.media.MediaPayloads
@@ -15,6 +16,10 @@ import com.nfctool.app.core.ndef.NdefCodec
 import com.nfctool.app.core.ndef.NdefFormatException
 import com.nfctool.app.core.ndef.NdefMessage
 import com.nfctool.app.core.ndef.NdefRecords
+import com.nfctool.app.core.update.AppVersion
+import com.nfctool.app.core.update.ReleaseAsset
+import com.nfctool.app.core.update.ReleaseInfo
+import com.nfctool.app.core.update.UpdateCheck
 import com.nfctool.app.core.wifi.CurrentWifi
 import com.nfctool.app.core.wifi.CurrentWifiResult
 import com.nfctool.app.core.wsc.WifiCredential
@@ -25,6 +30,9 @@ import com.nfctool.app.data.AppSettings
 import com.nfctool.app.data.HistoryRepository
 import com.nfctool.app.data.SettingsRepository
 import com.nfctool.app.data.db.HistoryEntry
+import com.nfctool.app.data.update.DownloadResult
+import com.nfctool.app.data.update.InstallResult
+import com.nfctool.app.data.update.UpdateRepository
 import com.nfctool.app.nfc.CurrentWifiReader
 import com.nfctool.app.nfc.NfcTagReader
 import com.nfctool.app.nfc.NfcTagWriter
@@ -67,6 +75,35 @@ sealed interface WifiReadState {
     class Result(val result: CurrentWifiResult) : WifiReadState
 }
 
+/**
+ * 在线更新的界面状态。
+ *
+ * 「检查失败」「已是最新」这类一次性结果不在这里，而是走全局提示弹窗；
+ * 这里只保留需要持续渲染的状态（检查中 / 发现新版本 / 下载中）。
+ */
+sealed interface UpdateUiState {
+
+    data object Idle : UpdateUiState
+
+    data object Checking : UpdateUiState
+
+    class Available(val info: ReleaseInfo, val asset: ReleaseAsset) : UpdateUiState
+
+    /**
+     * @param info 下载过程中仍要展示版本与更新说明，因此随状态一起携带，
+     *   否则进度弹窗会丢失标题与说明。
+     */
+    class Downloading(
+        val info: ReleaseInfo,
+        val downloadedBytes: Long,
+        val totalBytes: Long,
+    ) : UpdateUiState {
+
+        val fraction: Float
+            get() = if (totalBytes <= 0L) 0f else (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
+    }
+}
+
 /** 等待标签靠近才能执行的操作。 */
 sealed interface PendingOperation {
 
@@ -91,6 +128,7 @@ data class NfcToolUiState(
     val history: List<HistoryEntry> = emptyList(),
     val readMifareDump: Boolean = false,
     val wifiRead: WifiReadState = WifiReadState.Idle,
+    val update: UpdateUiState = UpdateUiState.Idle,
 ) {
 
     /**
@@ -118,6 +156,7 @@ data class NfcToolUiState(
 class NfcToolViewModel(
     private val settingsRepository: SettingsRepository,
     private val historyRepository: HistoryRepository,
+    private val updateRepository: UpdateRepository,
     /** 应用级 Context，供读取当前 WiFi 使用（不能用 Activity，否则随重建泄漏）。 */
     private val appContext: Context,
 ) : ViewModel() {
@@ -546,6 +585,120 @@ class NfcToolViewModel(
         mutableUiState.update { it.copy(wifiRead = WifiReadState.Notice(text)) }
     }
 
+    // ------------------------------------------------------------ 在线更新
+
+    /**
+     * 检查更新。
+     *
+     * 只在用户主动点击时触发，不做启动自动检查：本应用的定位是离线工具，
+     * 不该在用户没要求的时候联网。检查结果里「已是最新 / 失败 / 已跳过」
+     * 走全局提示弹窗，只有「发现新版本」会停留在 [UpdateUiState.Available] 上渲染更新弹窗。
+     */
+    fun checkForUpdate() {
+        if (mutableUiState.value.update is UpdateUiState.Checking) return
+        mutableUiState.update { it.copy(update = UpdateUiState.Checking) }
+        viewModelScope.launch {
+            val current = AppVersion.parse(BuildConfig.VERSION_NAME)
+            if (current == null) {
+                finishUpdateWithStatus(
+                    "无法解析当前版本号「${BuildConfig.VERSION_NAME}」，已取消检查。",
+                    StatusLevel.ERROR,
+                )
+                return@launch
+            }
+            when (val result = updateRepository.check(current)) {
+                is UpdateCheck.Available -> mutableUiState.update {
+                    // 同时清掉可能残留的结果提示，避免两个弹窗叠在一起
+                    it.copy(update = UpdateUiState.Available(result.info, result.asset), status = null)
+                }
+
+                is UpdateCheck.UpToDate -> finishUpdateWithStatus(
+                    if (result.skipped) {
+                        "已跳过 ${result.latest}，如需更新请在设置里取消跳过。"
+                    } else {
+                        "已是最新版本（$current）。"
+                    },
+                    StatusLevel.SUCCESS,
+                )
+
+                is UpdateCheck.Failed -> finishUpdateWithStatus(result.reason, StatusLevel.ERROR)
+            }
+        }
+    }
+
+    /** 下载当前发现的新版本，下载完成后直接拉起系统安装器。 */
+    fun downloadUpdate() {
+        val available = mutableUiState.value.update as? UpdateUiState.Available ?: return
+        mutableUiState.update {
+            it.copy(update = UpdateUiState.Downloading(available.info, 0L, available.asset.sizeBytes))
+        }
+        viewModelScope.launch {
+            val result = updateRepository.download(available.asset) { downloaded, total ->
+                mutableUiState.update { state ->
+                    if (state.update is UpdateUiState.Downloading) {
+                        state.copy(update = UpdateUiState.Downloading(available.info, downloaded, total))
+                    } else {
+                        state
+                    }
+                }
+            }
+            when (result) {
+                is DownloadResult.Success -> {
+                    mutableUiState.update { it.copy(update = UpdateUiState.Idle) }
+                    when (val install = updateRepository.install(result.file)) {
+                        is InstallResult.Launched -> showStatus(
+                            "安装包已下载，请在系统安装界面确认安装。",
+                            StatusLevel.SUCCESS,
+                        )
+
+                        is InstallResult.NeedsPermission -> showStatus(
+                            "需要先允许本应用安装未知来源的应用。已在系统设置中打开开关，" +
+                                "开启后请重新点「检查更新」。",
+                            StatusLevel.WARNING,
+                        )
+
+                        is InstallResult.Failed -> showStatus(install.reason, StatusLevel.ERROR)
+                    }
+                }
+
+                is DownloadResult.Failed -> finishUpdateWithStatus(result.reason, StatusLevel.ERROR)
+            }
+        }
+    }
+
+    /** 跳过当前提示的版本，之后检查到它不再提示。 */
+    fun skipUpdate() {
+        val available = mutableUiState.value.update as? UpdateUiState.Available ?: return
+        viewModelScope.launch {
+            updateRepository.skip(available.info.version)
+            mutableUiState.update { it.copy(update = UpdateUiState.Idle) }
+            showStatus(
+                "已跳过 ${available.info.version}，之后检查到该版本不再提示。可在设置里取消跳过。",
+                StatusLevel.INFO,
+            )
+        }
+    }
+
+    /** 取消跳过，让下一次检查重新提示该版本。 */
+    fun clearSkippedUpdate() {
+        viewModelScope.launch {
+            updateRepository.clearSkipped()
+            showStatus("已取消跳过，下次检查会重新提示新版本。", StatusLevel.INFO)
+        }
+    }
+
+    fun dismissUpdate() {
+        mutableUiState.update { it.copy(update = UpdateUiState.Idle) }
+    }
+
+    private fun finishUpdateWithStatus(text: String, level: StatusLevel) {
+        mutableUiState.update { it.copy(update = UpdateUiState.Idle, status = StatusMessage(text, level)) }
+    }
+
+    private fun showStatus(text: String, level: StatusLevel) {
+        mutableUiState.update { it.copy(status = StatusMessage(text, level)) }
+    }
+
     // ------------------------------------------------------------ 设置与历史
 
     fun setThemeId(themeId: String) {
@@ -645,6 +798,7 @@ class NfcToolViewModel(
             return NfcToolViewModel(
                 settingsRepository = container.settingsRepository,
                 historyRepository = container.historyRepository,
+                updateRepository = container.updateRepository,
                 appContext = container.appContext,
             ) as T
         }

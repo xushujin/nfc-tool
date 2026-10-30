@@ -4,11 +4,19 @@
 
     <!--
       权限说明见「关于」页与 README「权限清单」章节，两处逐条对应。
-      本应用不申请 INTERNET 权限：写入的网页/音视频地址只是被写进标签，
-      应用自身从不联网请求，也不需要联网才能工作。
+      INTERNET 只为「检查更新 / 下载新版本」而申请：写入的网页、音视频地址
+      只是被写进标签，应用不会去访问它们；除更新检查外没有任何网络请求。
     -->
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      应用内更新：下载完成后拉起系统安装器需要它。
+      它不授予静默安装能力 —— 每次安装仍要用户在系统界面点确认；
+      用户未开启「允许安装未知应用」时，应用会跳转到对应的系统设置页。
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
       ConnectivityManager 判断当前网络类型所需（普通权限，无需运行时申请）。
@@ -70,6 +78,21 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.NfcTool">
+
+        <!--
+          应用内更新下载的 APK 存放在 cacheDir/updates，通过 FileProvider 以 content://
+          形式交给系统安装器。authorities 用 applicationId 前缀，debug 包（.debug 后缀）
+          会自动区分，不会与正式包冲突。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!--
           不声明 NDEF_DISCOVERED / TECH_DISCOVERED 意图过滤器：

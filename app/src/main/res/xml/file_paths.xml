@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 暴露给系统安装器的路径。
+
+  只放开应用私有缓存下的 updates/ 子目录：更新包下载到这里，安装完成后由下载器在下次
+  下载时清理。其余任何目录（包括数据库、历史转储）都不共享。
+-->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

@@ -84,6 +84,39 @@ fun NeuLinearProgress(
 }
 
 /**
+ * 确定进度条。
+ *
+ * 下载更新有明确的字节数，因此给出真实百分比 —— 与 [NeuLinearProgress] 的
+ * 不确定动画区分开：后者用于「写入 NFC」这种无法量化进度的场景。
+ */
+@Composable
+fun NeuProgressBar(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    height: Dp = 8.dp,
+) {
+    val palette = NeuTheme.palette
+    val fraction = progress.coerceIn(0f, 1f)
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height),
+    ) {
+        val radius = CornerRadius(size.height / 2f, size.height / 2f)
+        drawRoundRect(color = palette.insetFill, cornerRadius = radius)
+
+        val filled = size.width * fraction
+        if (filled > 0f) {
+            drawRoundRect(
+                color = palette.accent,
+                size = Size(filled, size.height),
+                cornerRadius = radius,
+            )
+        }
+    }
+}
+
+/**
  * 「正在等标签」的呼吸波纹指示器。
  *
  * 三层同心弧由外向内扩散、透明度递减，向用户传达"设备在听，需要贴卡"。

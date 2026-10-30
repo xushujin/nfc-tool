@@ -47,8 +47,9 @@
 | 写入音视频 | 网络地址：URI 记录；本地文件：MIME 记录 | 本地文件受标签容量限制，见下文 |
 | 拉起指定应用 | Android 应用记录（外部类型 `android.com:pkg`） | 贴卡时唤起指定应用；包名写错会静默无反应，因此写入前强校验。包名可手动输入，也可从**已安装应用列表**里挑选 |
 | MIFARE Classic | 逐扇区认证 + 整卡转储 + 数据块回写 | 需要常见默认密钥；密钥未知的扇区无法读取 |
-| 读卡历史 | 本地 SQLite | 只存摘要，不存标签内容 |
+| 读卡历史 | 本地 SQLite | 摘要 + 标签原文（用于「用历史记录再次写入新卡」），可在设置中关闭自动记录 |
 | 主题 | 5 套拟态配色，全局生效 | 极光 / 沙丘 / 薄荷 / 石墨 / 午夜 |
+| 应用内更新 | GitHub Releases API + 应用内下载安装 | 手动检查；校验大小、SHA-256 与签名；需允许安装未知来源应用 |
 
 ### 明确不支持
 
@@ -60,6 +61,8 @@
 - **完整音视频文件**：标准 NDEF 标签可用容量通常只有 144~888 字节，装不下音视频。
   本地文件内嵌模式只适合极小的片段；容量不足时会明确报出「需要多少 / 可用多少」，不截断数据。
 - **企业级 WiFi**：WPA-Enterprise 需要账号与证书，不支持写入。
+- **静默安装**：Android 不允许普通应用静默安装 APK。应用内更新在下载完成后拉起系统安装器，
+  必须由用户在系统界面点确认；未开启「安装未知应用」时会跳转到系统设置页。
 
 ---
 
@@ -75,6 +78,7 @@
 | 存储 | 平台自带 SQLite（`SQLiteOpenHelper`） | 未使用 ORM |
 | 依赖注入 | 无框架，手工装配 | 见 `data/AppContainer.kt` |
 | 测试 | JUnit 4 + Truth + Robolectric 4.17 | Robolectric 固定在 API 34 |
+| 网络 | `HttpURLConnection` + 平台 `org.json` | 只用于检查更新与下载 APK，未引入 OkHttp / Retrofit 等第三方网络库 |
 | 第三方库 | **仅 AndroidX 官方库** | 未引入任何第三方 UI 库或 DI 框架 |
 
 ### 核心能力为自实现的部分
@@ -91,6 +95,7 @@
 | `mifare/*` | MIFARE Classic 扇区/块布局换算、厂商块与扇区尾块解析、转储文本编解码 |
 | `media/MediaPayloads` | 网页/音视频写入方案计算与容量决策 |
 | `capacity/CapacityCheck` | 写入前容量校验 |
+| `update/UpdatePolicy` | 版本号解析与比较、APK 附件挑选、下载域名白名单、`digest` 解析 |
 | `ui/component/NeuSurface` | 拟态双向阴影：分层扩散绘制，不依赖 `Modifier.shadow`（它只能画单侧）也不依赖 `Paint.setShadowLayer`（硬件加速画布上不可靠） |
 | `ui/component/NeuIcon` | 图标全部用画布几何图元自绘，不引图标库 |
 
@@ -151,6 +156,29 @@
 没有注册 `NDEF_DISCOVERED` / `TECH_DISCOVERED` 意图过滤器，也不使用已在 API 33 废弃的
 `enableForegroundDispatch`。只在自身处于前台时通过 reader mode 读卡。
 
+### 在线更新：只做「用户主动触发」的联网
+
+**选择**：检查更新走 GitHub Releases API（`/repos/{owner}/{repo}/releases/latest`），
+下载与安装都在应用内完成，不引入第三方更新 SDK。
+
+**理由**：
+
+- 发布流程本来就在 GitHub Actions 上（推 tag → 构建 → 发 Release），更新源与发布源天然一致；
+- 不引第三方库，符合「第三方依赖只有 AndroidX」的约束：HTTP 用 `HttpURLConnection`，
+  JSON 用平台自带的 `org.json`；
+- 只在用户点「检查更新」时发一次请求，不做启动自动检查、不轮询、不上报任何使用数据。
+
+**代价**：需要 `INTERNET` 与 `REQUEST_INSTALL_PACKAGES` 两个权限，早期版本「完全不联网」
+的表述不再成立。为此「关于」页与本文权限清单逐条改写，而不是含糊过去。
+
+**安全**：下载的包要过三道校验才交给系统安装器 —— 大小与 Release 元数据一致、
+发布方提供 `digest` 时校验 SHA-256、包名与签名证书必须与本应用完全一致。
+最后一道是硬边界：即使下载域名被劫持，签名不符的包也装不上（Android 本身也会拒绝覆盖安装，
+这里只是提前给出可读原因）。
+
+**跳过语义**：选择「跳过此版本」会把版本号存进设置，之后检查到该版本只提示一句
+「已跳过」，不再弹更新窗；设置页提供「取消跳过」把提示恢复，不会出现「跳过之后再也更新不了」。
+
 ---
 
 ## 工程结构
@@ -173,11 +201,13 @@ nfc-tool/
 │       │   │   │   ├── mifare/                  # 扇区布局、转储编解码
 │       │   │   │   ├── media/                   # 网页/音视频写入方案
 │       │   │   │   ├── capacity/                # 容量校验
+│       │   │   │   ├── update/                  # 版本比较与更新判定
 │       │   │   │   └── model/                   # 快照与摘要
 │       │   │   ├── data/                        # SQLite 持久层 + 仓库 + 手工容器
+│       │   │   │   └── update/                  # GitHub 客户端、APK 下载与安装
 │       │   │   ├── nfc/                         # 平台 NFC 适配层
 │       │   │   └── ui/                          # Compose 界面
-│       │   └── res/                             # 图标、颜色、主题
+│       │   └── res/                             # 图标、颜色、主题、FileProvider 路径
 │       └── test/
 │           ├── java/com/nfctool/app/            # 单元测试
 │           └── resources/
@@ -316,7 +346,7 @@ base64 -w0 nfc-tool-release.jks             # Linux
 ```bash
 # 1. 改版本号（versionCode 只能升不能降，versionName 必须与即将打的 tag 一致）
 #    app/build.gradle.kts 中：
-#      versionCode = 2
+#      versionCode = 3
 #      versionName = "1.1.0"
 
 # 2. 提交并推送（本仓库主分支名为 main）
@@ -396,7 +426,11 @@ curl -LO https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented
 
 ### 测试分层
 
-共 24 个测试类、196 个用例，全部通过。各测试类覆盖内容如下：
+共 26 个测试类、211 个用例，全部通过。1.1.0 新增 `AppVersionTest` / `UpdatePolicyTest` 共 15 个用例。
+这 26 个类分布在 23 个文件里 ——
+`HexTest.kt`、`NdefRecordsTest.kt`、`MifareClassicLayoutTest.kt` 各含两个类
+（`BytesTest`、`UriPrefixTest`、`MifareClassicPartsTest`），因此下表按**类名**索引，
+不能按文件名去找。各测试类覆盖内容如下：
 
 | 测试类 | 覆盖内容 |
 | --- | --- |
@@ -422,6 +456,8 @@ curl -LO https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented
 | `AppDatabaseTest` | 真实 SQLite 上的建表、增删查改、字段往返、重开不迁移；**全新库的结构与迁移后的库一致**；**从 v1 升级到 v2 保留数据**；历史原文按需存取 |
 | `SettingsRepositoryTest` | 设置落库与内存状态一致、损坏值回退默认 |
 | `NfcToolUiStateTest` | 写卡后自动回读必须**保留**结果提示、主动读卡必须清空（复制"没反应"的回归测试） |
+| `AppVersionTest` | 版本号解析（`v` 前缀、缺省段、`-debug` 等后缀）与三段式比较；debug 包与正式包解析结果一致 |
+| `UpdatePolicyTest` | 是否提示更新、已跳过版本不提示、APK 附件挑选、下载域名白名单、`digest` 的 SHA-256 解析 |
 
 ### 本次实际验证过的项
 
@@ -430,19 +466,23 @@ curl -LO https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented
 | 验证项 | 命令 | 结果 |
 | --- | --- | --- |
 | 编译零警告 | `./gradlew :app:compileDebugKotlin` | 通过，`allWarningsAsErrors = true` 下无任何 `w:` 输出 |
-| 单元测试 | `./gradlew :app:testDebugUnitTest` | 24 个测试类、196 个用例全部通过 |
+| 单元测试 | `./gradlew :app:testDebugUnitTest` | 26 个测试类、211 个用例全部通过（1.1.0 实跑） |
 | Lint | `./gradlew :app:lintDebug` | 通过，`warningsAsErrors = true` 下 0 error 0 warning |
 | debug 包 | `./gradlew :app:assembleDebug` | 产出 `app-debug.apk` |
 | release 包 + 签名 | `./gradlew :app:assembleRelease` | 产出 `app-release.apk`，`apksigner verify` 通过 |
 | 缺签名材料时拒绝出包 | 删除 `keystore.properties` 后构建 | 构建失败并打印两条通道的配置指引 |
 
+> 1.1.0 已在本机实跑：debug / release 编译、26 个测试类 211 个用例、Lint（0 error 0 warning）、
+> debug 包与 R8 压缩均通过。release APK 未在本机出包（缺签名材料），由 CI 完成签名与发布。
+
 ### Lint 被降级的检查
 
-`app/lint.xml` 里降级了三条检查，每条都写了理由（该文件内可见）：
+`app/lint.xml` 里降级了四条检查，每条都写了理由（该文件内可见）：
 
 | 检查 | 理由 |
 | --- | --- |
 | `NewerVersionAvailable` | Kotlin / Compose 编译器插件被 AGP 9 内置 Kotlin 锁死在 2.2.10，不能升级 |
+| `AndroidGradlePluginVersion` | 同上：AGP / Gradle 版本被内置 Kotlin 约束锁住；该检查是 error 级，上游发版就会让构建失败，与代码质量无关 |
 | `UseKtx` | Lint 建议的 `androidx.core.database.transaction` 在 androidx.core 1.19.1 中不存在（已验证：引入即编译失败） |
 | `UnnecessaryRequiredFeature` | NFC 是本应用的核心前提，`required="true"` 是有意的 |
 
@@ -625,6 +665,7 @@ python3 tools/generate_icons.py             # 需要 pip install Pillow
 | MIFARE Classic 扇区/块布局 | MIFARE Classic 公开规格（每块 16 字节，4K 前 32 扇区 4 块 / 后 8 扇区 16 块） | 布局自洽性由单测校验（块数 × 16 = 容量） |
 | 扇区尾块与厂商块字段布局 | MIFARE Classic 公开规格（KeyA 6 + 访问位 4 + KeyB 6；UID 4 + BCC 1 + SAK 1 + ATQA 2 + 厂商数据 8） | 与转储样本逐字节比对 |
 | `+Sector: N` 文本转储格式 | 读卡工具社区事实约定，**无规范性文档可引用** | 只按最小共识实现（扇区号从 0 连续递增、每行一个块），其余 `+` 行忽略 |
+| GitHub Releases API 字段（`tag_name` / `assets[].browser_download_url` / `digest`） | GitHub REST API 文档（`X-GitHub-Api-Version: 2022-11-28`） | 按文档字段名解析；`digest` 缺失时降级为「大小 + 包名 + 签名」校验 |
 
 WSC 的混合模式取值（认证 `0x0022`、加密 `0x000C`）在 hostap 与 ndeflib 中**都没有**
 以具名常量形式出现，本工程因此**不采纳**这两个组合值，只支持上表中的单一取值。
@@ -637,6 +678,8 @@ WSC 的混合模式取值（认证 `0x0022`、加密 `0x000C`）在 hostap 与 n
 | --- | --- | --- | --- |
 | `android.permission.NFC` | 普通权限 | 前台读卡与写卡 | 核心功能不可用 |
 | `android.permission.VIBRATE` | 普通权限 | 读卡成功时的振动反馈（可在设置中关闭） | 无振动反馈，其余功能正常 |
+| `android.permission.INTERNET` | 普通权限（安装时获得） | 检查更新与下载新版本 APK（GitHub Releases） | 无法检查更新，其余功能正常 |
+| `android.permission.REQUEST_INSTALL_PACKAGES` | 特殊权限（用户手动开启） | 下载完成后拉起系统安装器 | 无法在应用内安装，可手动下载安装 |
 | `android.permission.ACCESS_NETWORK_STATE` | 普通权限（安装时获得） | 判断当前网络类型 | 无法判断是否连着 WiFi |
 | `android.permission.ACCESS_WIFI_STATE` | 普通权限（安装时获得） | 读取「当前连接的 WiFi 名称」的兜底路径 | 兜底路径失效；部分 ROM 会直接抛 `SecurityException` |
 | `android.permission.NEARBY_WIFI_DEVICES` | 运行时权限（Android 13+） | 读取「当前连接的 WiFi 名称」 | WiFi 名需手动输入，其余功能正常 |
@@ -644,8 +687,11 @@ WSC 的混合模式取值（认证 `0x0022`、加密 `0x000C`）在 hostap 与 n
 | `android.permission.ACCESS_COARSE_LOCATION` | 运行时权限 | 与 FINE 成对申请（lint 要求：精确权限缺失时系统至少能给出粗略值） | 同上 |
 | `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | signature 级 | **不是本应用申请的**，由 androidx.core 在 manifest 合并阶段自动注入 | 不适用 |
 
-后三条说明：
+其中几条补充说明：
 
+- `INTERNET` 只为更新而申请：应用不会访问写进标签的网址，也没有任何统计、广告或崩溃上报。
+- `REQUEST_INSTALL_PACKAGES` **不授予静默安装能力**。它只让应用能拉起系统安装器，
+  每次安装仍需用户在系统界面确认；用户未开启「安装未知应用」时，应用跳转到系统设置页。
 - `NEARBY_WIFI_DEVICES` 已声明 `neverForLocation`，表示**不用于定位**；它只在 Android 13+ 存在，`usesPermissionFlags` 属性在低版本会被解析器忽略（无害，manifest 内已用 `tools:ignore="UnusedAttribute"` 说明）。
 - 位置相关权限**不再限制 `maxSdkVersion`**：Android 13+ 的主路径用 `NEARBY_WIFI_DEVICES`，
   但部分厂商 ROM（如 MIUI）仍以定位为前置，因此保留声明；只有在读不到 SSID 时才**引导用户补授**，
@@ -711,8 +757,8 @@ Android 11+ 的**包可见性**规则下，不声明它，`queryIntentActivities
 > 触碰系统服务的调用一律不放在主线程，且每次点击都必须在同一帧里产生可见反馈 ——
 > 否则主线程被系统调用卡住时，用户看到的就是"点了没反应"。详见上文「第三个 bug」。
 
-- 未申请 `INTERNET`：写入的网址只是被写进标签，应用自身从不发起网络请求。
-- 未申请定位、存储、相机等任何权限。
+- `INTERNET` 只用于检查更新与下载 APK：写入的网址只是被写进标签，应用不会去访问。
+- 未申请存储、相机、通讯录等权限；定位权限只服务于「读取当前 WiFi 名称」，且只在用户主动点击时申请。
 - 申请了 `uses-feature android:hardware.nfc required="true"`，无 NFC 硬件的设备不会在应用市场看到本应用。
 - 「关于」页内的权限说明与本节内容逐项对应（见 `ui/screen/AppInfo.kt` 的 `PERMISSIONS`）。
 
@@ -726,7 +772,8 @@ Android 11+ 的**包可见性**规则下，不声明它，`queryIntentActivities
 | WiFi 密码 | 写入标签时按 WSC 规范编码进标签；若该标签被读卡并记入历史，密码会随 NDEF 原文一起落库（同上，可关闭/删除） |
 | 完整卡片快照 | 读卡后既用于「读卡 → 写卡」的内存传递，也（按需）随历史落库 |
 | 云备份 | `android:allowBackup="false"`，数据不会随系统备份离开设备 |
-| 网络 | 无 `INTERNET` 权限，不联网 |
+| 网络 | 只有「检查更新」会访问 `https://api.github.com`，不携带账号、设备标识或使用数据；下载走 GitHub 的发布域名。写入标签的网址与音视频地址不会被应用访问 |
+| 更新包 | 下载到应用私有缓存 `cacheDir/updates`，通过 FileProvider 交给系统安装器；下次下载时清理旧包，不写入外部存储 |
 
 数据库文件：`/data/data/com.nfctool.app/databases/nfc_tool.db`（debug 包为 `.debug` 后缀的包名）。
 
@@ -771,7 +818,8 @@ Android 11+ 的**包可见性**规则下，不声明它，`queryIntentActivities
    如遇混淆相关问题，请优先检查 `app/proguard-rules.pro`。`。
 9. **未做无障碍（TalkBack）适配验证。**
    界面提供了 `contentDescription`，但没有用 TalkBack 实际走查过。
-10. **未接入 Crash 上报 / 埋点**，符合「不联网」的设计，但也意味着线上问题无法远程定位。
+10. **未接入 Crash 上报 / 埋点**：应用只访问 GitHub Releases 接口，没有统计或崩溃上报，
+    因此线上问题无法远程定位。
 11. **「使用当前连接的 WiFi」这条链路没有真机验证过。**
    SSID 规范化逻辑有用例覆盖，但以下都由运行时环境决定，无法在 JVM 上验证：
    - 权限弹窗的实际表现（授予 / 拒绝 / 仅本次使用时 / 永久拒绝的判定）；
@@ -805,6 +853,15 @@ Android 11+ 的**包可见性**规则下，不声明它，`queryIntentActivities
    本应用也**无法克隆 UID**（厂商块出厂只读），
    因此靠 UID 认证的门禁卡即使复制成功也刷不开门 —— 这是 MIFARE Classic 的硬件限制，
    不是实现问题。若需要 UID 级克隆，只能用可写 UID 的特殊卡片配合专用工具。
+17. **在线更新链路未在真机验证过。**
+   编译、单元测试与 Lint 已在本地通过，但没有带 NFC 硬件的设备可装包实测。
+   以下行为只有代码审查与纯逻辑单测支撑：
+   - GitHub API 的实际返回，尤其 `digest` 字段是否随附件提供（缺失时降级为签名校验）；
+   - 真实网络下的下载进度节奏与断网中断表现；
+   - FileProvider 授权、系统安装器、以及各厂商 ROM 上「安装未知应用」设置页的跳转；
+   - 签名一致性校验在 release 包上的表现。**debug 包因包名带 `.debug` 后缀，
+     无法安装 release 包**，这是预期行为，不是缺陷；
+   - 跳过 / 取消跳过的状态在各版本间的持久化。
 
 ---
 

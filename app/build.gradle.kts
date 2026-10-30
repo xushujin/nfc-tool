@@ -49,11 +49,15 @@ android {
         // minSdk 26：VibrationEffect 等 API 从 26 起可用，取 26 可避免为 24/25 写已废弃的兼容分支
         minSdk = 26
         targetSdk = 37
-        // 1.0.1：修复自定义形状点击时闪出方框（写入页胶囊标签、分段选择器等）。
+        // 1.1.0：新增应用内在线更新（GitHub Releases 检查 + 应用内下载安装）。
         // 发版约束：versionCode 只能升不能降；versionName 必须与所打的 tag 一致
         // （CI 的 release 任务会校验 tag == "v" + versionName，不一致直接失败）。
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
+
+        // 在线更新的仓库坐标（owner/repo）。检查更新时请求
+        // https://api.github.com/repos/<GITHUB_REPO>/releases/latest
+        buildConfigField("String", "GITHUB_REPO", "\"xushujin/nfc-tool\"")
     }
 
     signingConfigs {
